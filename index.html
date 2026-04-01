@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IQ Layer</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=Noto+Serif+JP:wght@200;300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --void:#060810; --deep:#0a0e1a; --ink:#0f1428;
+  --accent:#4080e0; --accent-dim:#204080; --accent-bright:#80b0ff;
+  --gold:#c9a84c; --gold-bright:#f0d080;
+  --correct:#40c060; --wrong:#e04040;
+  --text:#e0e8ff; --text-dim:#6070a0;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--void); color:var(--text);
+  font-family:'Noto Serif JP',serif; font-weight:200;
+  min-height:100vh; overflow-x:hidden;
+}
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;width:100%;height:100%;}
+.wrap{position:relative;z-index:1;max-width:720px;margin:0 auto;padding:0 20px;}
+
+/* ヘッダー */
+header{text-align:center;padding:80px 0 40px;}
+.brain-sigil{width:80px;height:80px;margin:0 auto 24px;}
+.brain-sigil svg{width:100%;height:100%;animation:pulse 3s ease-in-out infinite;}
+@keyframes pulse{0%,100%{filter:drop-shadow(0 0 6px rgba(64,128,224,0.4))}50%{filter:drop-shadow(0 0 18px rgba(64,128,224,0.9))}}
+h1{font-family:'Cormorant Garamond',serif;font-weight:300;font-size:clamp(2rem,5vw,3rem);letter-spacing:0.25em;color:var(--accent-bright);margin-bottom:8px;text-shadow:0 0 40px rgba(64,128,224,0.5);}
+.subtitle{font-size:0.72rem;letter-spacing:0.3em;color:var(--text-dim);margin-bottom:32px;}
+
+/* スタート画面 */
+.start-screen{border:1px solid rgba(64,128,224,0.2);padding:36px 28px;background:rgba(10,14,26,0.7);backdrop-filter:blur(10px);margin-bottom:32px;position:relative;}
+.corner{position:absolute;width:14px;height:14px;border-color:var(--accent-dim);border-style:solid;}
+.corner.tl{top:-1px;left:-1px;border-width:1px 0 0 1px;}
+.corner.tr{top:-1px;right:-1px;border-width:1px 1px 0 0;}
+.corner.bl{bottom:-1px;left:-1px;border-width:0 0 1px 1px;}
+.corner.br{bottom:-1px;right:-1px;border-width:0 1px 1px 0;}
+
+.field{margin-bottom:18px;}
+.field label{display:block;font-size:0.65rem;letter-spacing:0.15em;color:var(--text-dim);margin-bottom:6px;}
+.field input,.field textarea{
+  width:100%;background:rgba(255,255,255,0.03);
+  border:1px solid rgba(64,128,224,0.15);border-radius:1px;
+  color:var(--text);padding:10px 14px;outline:none;
+  font-family:inherit;font-size:0.82rem;transition:border-color .3s;
+}
+.field input:focus,.field textarea:focus{border-color:rgba(64,128,224,0.5);}
+
+.start-btn,.next-btn,.retry-btn{
+  width:100%;padding:15px;background:transparent;
+  border:1px solid rgba(64,128,224,0.4);color:var(--accent-bright);
+  font-family:inherit;font-size:0.82rem;letter-spacing:0.2em;
+  cursor:pointer;transition:all .3s;touch-action:manipulation;
+}
+.start-btn:hover,.next-btn:hover,.retry-btn:hover{
+  background:rgba(64,128,224,0.08);border-color:rgba(64,128,224,0.7);
+}
+.start-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* ローディング */
+.loading-screen{display:none;text-align:center;padding:60px 20px;}
+.loading-screen.show{display:block;}
+.brain-orb{width:70px;height:70px;margin:0 auto 24px;border-radius:50%;
+  background:radial-gradient(circle at 35% 35%,rgba(64,128,224,0.8),rgba(20,40,120,0.4));
+  box-shadow:0 0 40px rgba(64,128,224,0.4);
+  animation:orb-pulse 1.5s ease-in-out infinite;}
+@keyframes orb-pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15);box-shadow:0 0 60px rgba(64,128,224,0.6);}}
+.loading-text{font-size:0.75rem;letter-spacing:0.3em;color:var(--text-dim);animation:fade 1.5s ease-in-out infinite;}
+@keyframes fade{0%,100%{opacity:0.3}50%{opacity:1}}
+
+/* テスト画面 */
+.test-screen{display:none;}
+.test-screen.show{display:block;}
+.progress-bar{margin-bottom:24px;}
+.progress-info{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.progress-num{font-size:0.7rem;letter-spacing:0.15em;color:var(--text-dim);}
+.progress-type{font-size:0.65rem;padding:3px 10px;border-radius:20px;border:1px solid;}
+.progress-type.lang{color:#a0d0a0;border-color:#a0d0a0;}
+.progress-type.math{color:#ffd080;border-color:#ffd080;}
+.progress-type.pattern{color:#d0a0ff;border-color:#d0a0ff;}
+.progress-type.logic{color:#80d0ff;border-color:#80d0ff;}
+.progress-track{height:3px;background:rgba(64,128,224,0.15);border-radius:2px;overflow:hidden;}
+.progress-fill{height:100%;background:linear-gradient(to right,var(--accent),var(--accent-bright));border-radius:2px;transition:width .4s ease;}
+
+.question-card{border:1px solid rgba(64,128,224,0.2);padding:28px 24px;background:rgba(10,14,26,0.7);backdrop-filter:blur(10px);margin-bottom:20px;position:relative;}
+.q-number{font-size:0.62rem;letter-spacing:0.2em;color:var(--text-dim);margin-bottom:12px;}
+.q-text{font-size:0.95rem;line-height:1.9;letter-spacing:0.06em;color:var(--text);margin-bottom:8px;}
+.q-note{font-size:0.72rem;color:var(--text-dim);letter-spacing:0.05em;margin-top:8px;font-style:italic;}
+
+.choices{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+@media(max-width:480px){.choices{grid-template-columns:1fr;}}
+.choice-btn{
+  padding:12px 14px;background:transparent;
+  border:1px solid rgba(64,128,224,0.2);border-radius:1px;
+  color:var(--text);font-family:inherit;font-size:0.8rem;
+  letter-spacing:0.05em;cursor:pointer;transition:all .25s;
+  text-align:left;touch-action:manipulation;line-height:1.5;
+}
+.choice-btn:hover:not(:disabled){background:rgba(64,128,224,0.08);border-color:rgba(64,128,224,0.5);}
+.choice-btn.selected{background:rgba(64,128,224,0.12);border-color:var(--accent);}
+.choice-btn.correct{background:rgba(64,192,96,0.15)!important;border-color:var(--correct)!important;color:var(--correct)!important;}
+.choice-btn.wrong{background:rgba(224,64,64,0.12)!important;border-color:var(--wrong)!important;color:var(--wrong)!important;}
+.choice-btn.reveal{background:rgba(64,192,96,0.08)!important;border-color:rgba(64,192,96,0.4)!important;}
+.choice-btn:disabled{cursor:default;}
+
+.explanation{display:none;padding:14px 16px;border:1px solid rgba(64,128,224,0.15);background:rgba(64,128,224,0.05);font-size:0.78rem;line-height:1.9;color:var(--text-dim);margin-bottom:16px;}
+.explanation.show{display:block;}
+
+/* 結果画面 */
+.result-screen{display:none;border:1px solid rgba(64,128,224,0.2);padding:40px 28px;background:rgba(10,14,26,0.7);backdrop-filter:blur(10px);margin-bottom:32px;animation:fadeIn .8s ease;}
+.result-screen.show{display:block;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.iq-score{font-family:'Cormorant Garamond',serif;font-size:clamp(4rem,15vw,7rem);color:var(--accent-bright);text-shadow:0 0 50px rgba(64,128,224,0.6);text-align:center;line-height:1;margin-bottom:8px;}
+.iq-label{text-align:center;font-size:0.65rem;letter-spacing:0.3em;color:var(--text-dim);margin-bottom:20px;}
+.iq-grade{text-align:center;font-size:1.2rem;letter-spacing:0.2em;color:var(--gold-bright);margin-bottom:24px;}
+.score-bar-wrap{margin-bottom:24px;}
+.score-bar-label{display:flex;justify-content:space-between;font-size:0.65rem;color:var(--text-dim);margin-bottom:6px;}
+.score-bar-track{height:8px;background:rgba(64,128,224,0.12);border-radius:4px;overflow:hidden;}
+.score-bar-fill{height:100%;border-radius:4px;background:linear-gradient(to right,var(--accent),var(--accent-bright));transition:width 1s ease;}
+.category-scores{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:24px;}
+.cat-score{padding:12px;border:1px solid rgba(64,128,224,0.15);background:rgba(64,128,224,0.04);}
+.cat-name{font-size:0.62rem;letter-spacing:0.1em;color:var(--text-dim);margin-bottom:4px;}
+.cat-val{font-size:1.1rem;letter-spacing:0.1em;}
+.cat-val.lang{color:#a0d0a0;}
+.cat-val.math{color:#ffd080;}
+.cat-val.pattern{color:#d0a0ff;}
+.cat-val.logic{color:#80d0ff;}
+.divider{text-align:center;margin:20px 0;font-size:0.7rem;letter-spacing:0.3em;color:var(--accent-dim);}
+.ai-comment{font-size:0.85rem;line-height:2.1;letter-spacing:0.05em;color:var(--text);white-space:pre-wrap;}
+
+.error-msg{display:none;padding:12px 16px;border:1px solid rgba(64,128,224,0.3);color:#8090c0;font-size:0.75rem;line-height:1.8;margin-top:12px;}
+.error-msg.show{display:block;}
+
+footer{text-align:center;padding:32px 0 60px;font-size:0.6rem;letter-spacing:0.2em;color:var(--text-dim);}
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+<div class="wrap">
+  <header>
+    <div class="brain-sigil">
+      <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="40" cy="40" r="37" stroke="#4080e0" stroke-width="0.6" opacity="0.6"/>
+        <circle cx="40" cy="40" r="26" stroke="#4080e0" stroke-width="0.3" opacity="0.4"/>
+        <!-- 脳のシルエット -->
+        <path d="M25 38 C22 32 24 24 30 22 C33 18 40 18 44 20 C48 16 56 18 58 24 C62 26 62 34 58 38 C60 42 58 50 54 52 C52 56 46 58 42 56 C40 60 34 60 30 56 C26 54 24 46 25 42 Z" fill="rgba(64,128,224,0.12)" stroke="#4080e0" stroke-width="0.8"/>
+        <!-- 脳の溝 -->
+        <path d="M35 28 C38 32 36 38 38 42" stroke="#4080e0" stroke-width="0.5" fill="none" opacity="0.6"/>
+        <path d="M44 26 C42 30 44 36 42 40" stroke="#4080e0" stroke-width="0.5" fill="none" opacity="0.6"/>
+        <path d="M30 36 C34 38 34 44 32 48" stroke="#4080e0" stroke-width="0.5" fill="none" opacity="0.5"/>
+        <path d="M50 34 C48 38 50 44 48 48" stroke="#4080e0" stroke-width="0.5" fill="none" opacity="0.5"/>
+        <!-- 光線 -->
+        <line x1="40" y1="2" x2="40" y2="10" stroke="#4080e0" stroke-width="0.5" opacity="0.5"/>
+        <line x1="40" y1="70" x2="40" y2="78" stroke="#4080e0" stroke-width="0.5" opacity="0.5"/>
+        <line x1="2" y1="40" x2="10" y2="40" stroke="#4080e0" stroke-width="0.5" opacity="0.5"/>
+        <line x1="70" y1="40" x2="78" y2="40" stroke="#4080e0" stroke-width="0.5" opacity="0.5"/>
+      </svg>
+    </div>
+    <h1>IQ Layer</h1>
+    <p class="subtitle">知能指数診断テスト</p>
+  </header>
+
+  <!-- スタート画面 -->
+  <div class="start-screen" id="startScreen">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+    <div class="field">
+      <label>⚡ Groq APIキー</label>
+      <div style="display:flex;gap:8px;align-items:flex-start">
+        <textarea id="apiKey" rows="2" placeholder="gsk_..." style="flex:1;resize:vertical;font-family:monospace;font-size:0.78rem;-webkit-text-security:disc;text-security:disc"></textarea>
+        <button onclick="toggleKey()" id="toggleBtn" style="padding:10px 12px;background:transparent;border:1px solid rgba(64,128,224,0.2);color:var(--text-dim);font-size:0.72rem;cursor:pointer;white-space:nowrap">表示</button>
+      </div>
+      <p style="font-size:0.62rem;color:var(--text-dim);margin-top:6px;line-height:1.8">Groq Console（console.groq.com）で無料取得。クレジットカード不要。</p>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px">
+      <div class="field" style="margin-bottom:0">
+        <label>お名前（任意）</label>
+        <input type="text" id="userName" placeholder="例：田中">
+      </div>
+      <div class="field" style="margin-bottom:0">
+        <label>年齢（任意）</label>
+        <input type="number" id="userAge" placeholder="例：30" min="10" max="99">
+      </div>
+    </div>
+
+    <div style="background:rgba(64,128,224,0.05);border:1px solid rgba(64,128,224,0.12);padding:16px;margin-bottom:20px;font-size:0.75rem;line-height:2;color:var(--text-dim);">
+      📋 テスト内容（全15問）<br>
+      ・言語・言葉問題（4問）<br>
+      ・数学・計算問題（4問）<br>
+      ・図形・パターン問題（4問）<br>
+      ・論理・推理問題（3問）<br>
+      ⚠️ 各問題に制限時間はありません。じっくり考えてください。
+    </div>
+
+    <button class="start-btn" id="startBtn" onclick="startTest()">テストを開始する</button>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- ローディング -->
+  <div class="loading-screen" id="loadingScreen">
+    <div class="brain-orb"></div>
+    <p class="loading-text" id="loadingText">AIが問題を生成しています…</p>
+  </div>
+
+  <!-- テスト画面 -->
+  <div class="test-screen" id="testScreen">
+    <div class="progress-bar">
+      <div class="progress-info">
+        <span class="progress-num" id="progressNum">1 / 15</span>
+        <span class="progress-type" id="progressType">言語</span>
+      </div>
+      <div class="progress-track">
+        <div class="progress-fill" id="progressFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="question-card">
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="q-number" id="qNumber">問題 1</div>
+      <div class="q-text" id="qText"></div>
+      <div class="q-note" id="qNote"></div>
+    </div>
+
+    <div class="choices" id="choices"></div>
+    <div class="explanation" id="explanation"></div>
+    <button class="next-btn" id="nextBtn" style="display:none" onclick="nextQuestion()">次の問題へ →</button>
+  </div>
+
+  <!-- 結果画面 -->
+  <div class="result-screen" id="resultScreen">
+    <div class="iq-score" id="iqScore">--</div>
+    <div class="iq-label">IQ スコア</div>
+    <div class="iq-grade" id="iqGrade"></div>
+
+    <div class="score-bar-wrap">
+      <div class="score-bar-label">
+        <span id="scoreLabel">正答率</span>
+        <span id="scoreRatio"></span>
+      </div>
+      <div class="score-bar-track">
+        <div class="score-bar-fill" id="scoreBarFill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <div class="category-scores" id="categoryScores"></div>
+
+    <div class="divider">◈</div>
+    <div class="ai-comment" id="aiComment"></div>
+    <button class="retry-btn" style="margin-top:28px" onclick="retryTest()">もう一度挑戦する</button>
+  </div>
+
+  <footer><p>IQ Layer — 知能指数診断テスト</p></footer>
+</div>
+
+<script>
+// ══════════════════════════════════════════
+// 状態管理
+// ══════════════════════════════════════════
+let questions = [];
+let currentQ = 0;
+let answers = [];
+let userAnswered = false;
+
+const TYPE_LABELS = {
+  lang:    { ja:'言語', cls:'lang' },
+  math:    { ja:'数学', cls:'math' },
+  pattern: { ja:'図形', cls:'pattern' },
+  logic:   { ja:'論理', cls:'logic' },
+};
+
+function storageSave(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function storageLoad(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+
+function toggleKey(){
+  const el=document.getElementById('apiKey');
+  const btn=document.getElementById('toggleBtn');
+  const h=el.style.webkitTextSecurity!=='none';
+  el.style.webkitTextSecurity=h?'none':'disc';
+  el.style.textSecurity=h?'none':'disc';
+  btn.textContent=h?'隠す':'表示';
+}
+
+function showError(msg){
+  const el=document.getElementById('errorMsg');
+  el.textContent=msg; el.className='error-msg show';
+}
+
+// ── テスト開始
+async function startTest(){
+  const apiKey=document.getElementById('apiKey').value.trim();
+  if(!apiKey){showError('Groq APIキーを入力してください');return;}
+  storageSave('iqlayer_key',apiKey);
+
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('loadingScreen').className='loading-screen show';
+
+  const userName=document.getElementById('userName').value.trim();
+  const userAge=document.getElementById('userAge').value;
+
+  const prompt=`あなたはIQテストの専門家です。
+以下の条件で15問のIQテスト問題をJSON形式で生成してください。
+
+条件：
+- 言語・言葉問題 4問（類義語・反義語・文章完成・語彙）
+- 数学・計算問題 4問（四則演算・数列・文章題・割合）
+- 図形・パターン問題 4問（数列パターン・規則性・図形推測）
+- 論理・推理問題 3問（三段論法・条件推理・空間推理）
+- 難易度は標準的なIQテストレベル
+- 各問題に4つの選択肢
+${userAge?`- 回答者の年齢：${userAge}歳`:''}
+
+必ず以下のJSON形式のみで返答してください（他の文字は一切不要）：
+[
+  {
+    "id": 1,
+    "type": "lang",
+    "question": "問題文",
+    "note": "補足説明（不要な場合は空文字）",
+    "choices": ["A. 選択肢1", "B. 選択肢2", "C. 選択肢3", "D. 選択肢4"],
+    "answer": 0,
+    "explanation": "解説文"
+  }
+]
+typeは lang/math/pattern/logic のいずれか。
+answerは正解の選択肢インデックス（0〜3）。
+問題文は日本語で。`;
+
+  try{
+    const MODELS=['llama-3.3-70b-versatile','llama3-70b-8192','gemma2-9b-it'];
+    let raw=''; let ok=false;
+    for(const model of MODELS){
+      try{
+        const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+          body:JSON.stringify({model,max_tokens:4000,temperature:0.7,messages:[{role:'user',content:prompt}]})
+        });
+        const data=await res.json();
+        if(res.ok&&data.choices?.[0]?.message?.content){
+          raw=data.choices[0].message.content; ok=true; break;
+        }
+      }catch(e){continue;}
+    }
+    if(!ok) throw new Error('API接続失敗');
+
+    // JSON抽出
+    const jsonMatch=raw.match(/\[[\s\S]*\]/);
+    if(!jsonMatch) throw new Error('問題の解析に失敗しました');
+    questions=JSON.parse(jsonMatch[0]);
+    if(!Array.isArray(questions)||questions.length<10) throw new Error('問題数が不足しています');
+
+    answers=new Array(questions.length).fill(-1);
+    currentQ=0;
+    document.getElementById('loadingScreen').className='loading-screen';
+    document.getElementById('testScreen').className='test-screen show';
+    renderQuestion();
+
+  }catch(err){
+    document.getElementById('loadingScreen').className='loading-screen';
+    document.getElementById('startScreen').style.display='block';
+    showError('エラー: '+err.message.slice(0,80));
+  }
+}
+
+// ── 問題表示
+function renderQuestion(){
+  const q=questions[currentQ];
+  const total=questions.length;
+
+  // プログレス
+  document.getElementById('progressNum').textContent=`${currentQ+1} / ${total}`;
+  const tl=TYPE_LABELS[q.type]||{ja:'問題',cls:'lang'};
+  const typeEl=document.getElementById('progressType');
+  typeEl.textContent=tl.ja; typeEl.className='progress-type '+tl.cls;
+  document.getElementById('progressFill').style.width=`${(currentQ/total)*100}%`;
+
+  // 問題
+  document.getElementById('qNumber').textContent=`問題 ${currentQ+1}`;
+  document.getElementById('qText').textContent=q.question;
+  document.getElementById('qNote').textContent=q.note||'';
+
+  // 選択肢
+  const choicesEl=document.getElementById('choices');
+  choicesEl.innerHTML='';
+  q.choices.forEach((c,i)=>{
+    const btn=document.createElement('button');
+    btn.className='choice-btn';
+    btn.textContent=c;
+    btn.onclick=()=>selectAnswer(i);
+    btn.addEventListener('touchend',function(e){e.preventDefault();selectAnswer(i);},{passive:false});
+    choicesEl.appendChild(btn);
+  });
+
+  document.getElementById('explanation').className='explanation';
+  document.getElementById('nextBtn').style.display='none';
+  userAnswered=false;
+}
+
+// ── 回答選択
+function selectAnswer(idx){
+  if(userAnswered) return;
+  userAnswered=true;
+  answers[currentQ]=idx;
+  const q=questions[currentQ];
+  const btns=document.querySelectorAll('.choice-btn');
+
+  btns.forEach((btn,i)=>{
+    btn.disabled=true;
+    if(i===q.answer) btn.classList.add('correct');
+    else if(i===idx&&idx!==q.answer) btn.classList.add('wrong');
+    else if(i!==idx&&i!==q.answer) btn.classList.add('reveal');
+  });
+
+  // 解説表示
+  if(q.explanation){
+    const expEl=document.getElementById('explanation');
+    expEl.textContent='💡 '+q.explanation;
+    expEl.className='explanation show';
+  }
+
+  document.getElementById('nextBtn').style.display='block';
+  if(currentQ===questions.length-1){
+    document.getElementById('nextBtn').textContent='結果を見る 🎯';
+  }
+}
+
+// ── 次の問題
+function nextQuestion(){
+  if(currentQ<questions.length-1){
+    currentQ++;
+    renderQuestion();
+    window.scrollTo({top:0,behavior:'smooth'});
+  } else {
+    showResult();
+  }
+}
+
+// ── 結果表示
+async function showResult(){
+  document.getElementById('testScreen').className='test-screen';
+  document.getElementById('loadingText').textContent='結果を分析しています…';
+  document.getElementById('loadingScreen').className='loading-screen show';
+
+  // カテゴリ別集計
+  const cats={lang:{correct:0,total:0},math:{correct:0,total:0},pattern:{correct:0,total:0},logic:{correct:0,total:0}};
+  let totalCorrect=0;
+  questions.forEach((q,i)=>{
+    const t=q.type||'lang';
+    if(cats[t]){
+      cats[t].total++;
+      if(answers[i]===q.answer){cats[t].correct++;totalCorrect++;}
+    }
+  });
+
+  const ratio=totalCorrect/questions.length;
+  // IQスコア算出（平均100・SD15）
+  const zScore=(ratio-0.5)/0.18;
+  const iq=Math.round(100+zScore*15);
+  const iqClamped=Math.max(60,Math.min(160,iq));
+
+  const grade=iqClamped>=140?'天才レベル':iqClamped>=130?'非常に優秀':iqClamped>=120?'優秀':iqClamped>=110?'平均以上':iqClamped>=90?'平均的':iqClamped>=80?'平均以下':'要努力';
+
+  // AIコメント生成
+  const apiKey=storageLoad('iqlayer_key')||document.getElementById('apiKey')?.value?.trim()||'';
+  const userName=document.getElementById('userName')?.value?.trim()||'';
+  const catSummary=Object.entries(cats).map(([k,v])=>`${TYPE_LABELS[k]?.ja||k}：${v.correct}/${v.total}問正解`).join('、');
+
+  const commentPrompt=`IQテストの結果を分析して、200〜300文字で日本語のフィードバックコメントを書いてください。
+結果：IQ ${iqClamped}点（${grade}）
+正答率：${totalCorrect}/${questions.length}問（${Math.round(ratio*100)}%）
+カテゴリ別：${catSummary}
+${userName?`回答者：${userName}`:''};
+励ましつつも具体的な強み・弱みを指摘してください。`;
+
+  let comment='';
+  try{
+    const res=await fetch('https://api.groq.com/openai/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
+      body:JSON.stringify({model:'llama-3.3-70b-versatile',max_tokens:600,temperature:0.8,messages:[{role:'user',content:commentPrompt}]})
+    });
+    const data=await res.json();
+    if(res.ok) comment=data.choices?.[0]?.message?.content||'';
+  }catch(e){}
+
+  document.getElementById('loadingScreen').className='loading-screen';
+
+  // 結果表示
+  document.getElementById('iqScore').textContent=iqClamped;
+  document.getElementById('iqGrade').textContent=grade;
+  document.getElementById('scoreRatio').textContent=`${totalCorrect} / ${questions.length} 問正解`;
+  setTimeout(()=>{document.getElementById('scoreBarFill').style.width=`${ratio*100}%`;},100);
+
+  // カテゴリ別スコア
+  const catEl=document.getElementById('categoryScores');
+  catEl.innerHTML=Object.entries(cats).map(([k,v])=>`
+    <div class="cat-score">
+      <div class="cat-name">${TYPE_LABELS[k]?.ja||k}</div>
+      <div class="cat-val ${k}">${v.correct}/${v.total}</div>
+    </div>`).join('');
+
+  document.getElementById('aiComment').textContent=comment;
+  document.getElementById('resultScreen').className='result-screen show';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ── リトライ
+function retryTest(){
+  questions=[];currentQ=0;answers=[];userAnswered=false;
+  document.getElementById('resultScreen').className='result-screen';
+  document.getElementById('errorMsg').className='error-msg';
+  document.getElementById('startScreen').style.display='block';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// APIキー復元
+window.addEventListener('DOMContentLoaded',()=>{
+  const k=storageLoad('iqlayer_key');
+  if(k){const el=document.getElementById('apiKey');if(el)el.value=k;}
+});
+
+// ══════════════════════════════════════════
+// Background Canvas
+// ══════════════════════════════════════════
+(function(){
+  const canvas=document.getElementById('bgCanvas');
+  const ctx=canvas.getContext('2d');
+  function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+  resize(); window.addEventListener('resize',resize);
+
+  // ニューロンネットワーク
+  let nodes=[], edges=[];
+  function initNetwork(){
+    nodes=[];edges=[];
+    const N=Math.floor(canvas.width*canvas.height/22000)+8;
+    for(let i=0;i<N;i++){
+      nodes.push({
+        x:Math.random()*canvas.width, y:Math.random()*canvas.height,
+        vx:(Math.random()-0.5)*0.3, vy:(Math.random()-0.5)*0.3,
+        r:Math.random()*2+1,
+        pulse:Math.random()*Math.PI*2,
+        pulseSpeed:Math.random()*0.03+0.01,
+      });
+    }
+    // エッジ（近い点を繋ぐ）
+    for(let i=0;i<nodes.length;i++){
+      for(let j=i+1;j<nodes.length;j++){
+        const dx=nodes[i].x-nodes[j].x;
+        const dy=nodes[i].y-nodes[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<160) edges.push({i,j,d});
+      }
+    }
+  }
+
+  // パルス信号
+  let pulses=[];
+  function spawnPulse(){
+    if(edges.length===0) return;
+    const edge=edges[Math.floor(Math.random()*edges.length)];
+    pulses.push({edge,t:0,speed:Math.random()*0.012+0.006});
+  }
+  function schedulePulse(){setTimeout(()=>{spawnPulse();schedulePulse();},Math.random()*800+200);}
+  schedulePulse();
+
+  initNetwork();
+  window.addEventListener('resize',()=>{resize();initNetwork();});
+
+  let frame=0;
+  function draw(){
+    ctx.fillStyle='rgba(6,8,16,0.18)';ctx.fillRect(0,0,canvas.width,canvas.height);
+    if(frame===0){ctx.fillStyle='#060810';ctx.fillRect(0,0,canvas.width,canvas.height);}
+
+    // ノード更新
+    nodes.forEach(n=>{
+      n.x+=n.vx; n.y+=n.vy; n.pulse+=n.pulseSpeed;
+      if(n.x<0||n.x>canvas.width) n.vx*=-1;
+      if(n.y<0||n.y>canvas.height) n.vy*=-1;
+    });
+
+    // エッジ描画
+    edges.forEach(e=>{
+      const a=nodes[e.i]; const b=nodes[e.j];
+      const dx=a.x-b.x; const dy=a.y-b.y;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist>200) return;
+      const alpha=(1-dist/200)*0.12;
+      ctx.strokeStyle=`rgba(64,128,224,${alpha})`;
+      ctx.lineWidth=0.5;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    });
+
+    // ノード描画
+    nodes.forEach(n=>{
+      const a=0.3+0.3*Math.sin(n.pulse);
+      ctx.globalAlpha=a;
+      ctx.fillStyle='rgba(80,140,240,1)';
+      ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill();
+    });
+
+    // パルス信号
+    pulses=pulses.filter(p=>p.t<=1);
+    pulses.forEach(p=>{
+      p.t+=p.speed;
+      const a=nodes[p.edge.i]; const b=nodes[p.edge.j];
+      const x=a.x+(b.x-a.x)*p.t; const y=a.y+(b.y-a.y)*p.t;
+      ctx.globalAlpha=Math.sin(p.t*Math.PI)*0.8;
+      const grd=ctx.createRadialGradient(x,y,0,x,y,5);
+      grd.addColorStop(0,'rgba(128,200,255,0.9)');
+      grd.addColorStop(1,'transparent');
+      ctx.fillStyle=grd; ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fill();
+    });
+
+    ctx.globalAlpha=1;
+    frame++; requestAnimationFrame(draw);
+  }
+  draw();
+})();
+</script>
+</body>
+</html>
